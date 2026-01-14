@@ -1,5 +1,2 @@
 pyTelegramBotAPI
-flask
 yt-dlp
-requests
-aiohttp

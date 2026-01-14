@@ -1,4 +1,4 @@
-mport asyncio
+import asyncio
 import os
 import random
 import logging
@@ -14,7 +14,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# --- KONFIGURATSIYA (Koyeb Variables orqali olinadi) ---
+# --- KONFIGURATSIYA ---
+# Koyeb'dagi Environment Variable'dan tokenni oladi
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = AsyncTeleBot(BOT_TOKEN)
 
@@ -55,6 +56,11 @@ def get_main_keyboard():
     markup.add(btn1, btn2, btn3, btn4, btn5, btn_stop)
     return markup
 
+def get_stop_only_keyboard():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("⛔ STOP", callback_data="stop_all"))
+    return markup
+
 async def download_audio(query):
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -65,39 +71,64 @@ async def download_audio(query):
         }],
         'outtmpl': 'music/%(title)s.%(ext)s',
         'quiet': True,
+        'no_warnings': True,
         'default_search': 'ytsearch1'
     }
     if not os.path.exists('music'): os.makedirs('music')
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(query, download=True)
-        filename = ydl.prepare_filename(info['entries'][0] if 'entries' in info else info)
-        return os.path.splitext(filename)[0] + ".mp3", info.get('title', 'Musiqa')
+        entry = info['entries'][0] if 'entries' in info else info
+        filename = ydl.prepare_filename(entry)
+        actual_filename = os.path.splitext(filename)[0] + ".mp3"
+        return actual_filename, entry.get('title', 'Musiqa')
 
 # --- HANDLERLAR ---
 
 @bot.message_handler(commands=['start'])
 async def send_welcome(message):
-    await bot.send_message(message.chat.id, "❤️ **Xolisxon Botiga xush kelibsiz!**", reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    chat_id = message.chat.id
+    user_states[chat_id] = {"looping": False, "last_msg_id": None}
+    welcome_text = "❤️ **Xolisxon Botiga xush kelibsiz!** ❤️\n\nTanlang:"
+    await bot.send_message(chat_id, welcome_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
 async def callback_listener(call):
     chat_id = call.message.chat.id
     if call.data == "loop_love":
         user_states[chat_id] = {"looping": True}
-        msg = await bot.send_message(chat_id, "❤️ Oqim boshlandi...")
+        await bot.answer_callback_query(call.id, "Boshlandi... ❤️")
+        msg = await bot.send_message(chat_id, "❤️ Oqim...", reply_markup=get_stop_only_keyboard())
         while user_states.get(chat_id, {}).get("looping"):
-            text = f"{random.choice(HEART_EFFECTS)} {random.choice(ROMANTIC_TEXTS)}"
             try:
-                await bot.edit_message_text(text, chat_id, msg.message_id)
+                text = f"{random.choice(HEART_EFFECTS)} {random.choice(ROMANTIC_TEXTS)}"
+                await bot.edit_message_text(text, chat_id, msg.message_id, reply_markup=get_stop_only_keyboard())
                 await asyncio.sleep(5)
             except: break
     elif call.data == "stop_all":
         user_states[chat_id] = {"looping": False}
         await bot.send_message(chat_id, "To'xtatildi.", reply_markup=get_main_keyboard())
+    elif call.data == "music_search":
+        await bot.send_message(chat_id, "🎵 Musiqa nomini yozing:")
+    elif call.data == "poems":
+        await bot.send_message(chat_id, random.choice(POEMS), reply_markup=get_main_keyboard())
+
+# Musiqa qidirish xabarlarini tutish
+@bot.message_handler(func=lambda m: True)
+async def handle_text(message):
+    if message.text.startswith('/'): return
+    status_msg = await bot.send_message(message.chat.id, "🔍 Qidirilmoqda...")
+    try:
+        file_path, title = await download_audio(message.text)
+        with open(file_path, 'rb') as audio:
+            await bot.send_audio(message.chat.id, audio, caption=f"✅ {title}")
+        os.remove(file_path)
+        await bot.delete_message(message.chat.id, status_msg.message_id)
+    except Exception as e:
+        await bot.edit_message_text("❌ Topilmadi.", message.chat.id, status_msg.message_id)
 
 # --- RUN ---
 async def main():
-    logger.info("Bot ishga tushdi...")
+    logger.info("Bot yondi...")
     await bot.polling(non_stop=True)
 
 if __name__ == "__main__":

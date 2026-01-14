@@ -9,13 +9,13 @@ from telebot import types
 # --- LOGGING KONFIGURATSIYA ---
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
 
 # --- KONFIGURATSIYA ---
-# Koyeb'dagi Environment Variable'dan tokenni oladi
+# Koyeb panelidagi Environment Variables qismidan tokenni oladi
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 bot = AsyncTeleBot(BOT_TOKEN)
 
@@ -29,17 +29,13 @@ ROMANTIC_TEXTS = [
     "Dunyo to'xtasa ham, senga bo'lgan sevgim to'xtamaydi. 🌏",
     "Har bir nafasimda seni isming bor. 💫",
     "Sen bilan o'tgan har bir soniya men uchun oltindan qimmat. ⏳",
-    "Seni baxtli ko'rish - mening eng katta orzuim. 🌈",
-    "Yuragimning har bir urushi 'Seni sevaman' demoqda. ❤️‍🔥",
-    "Sen meni qorong'u dunyomdagi eng porloq yulduzimsan. ⭐",
-    "Seni sog'inish - bu shirin azob. 🍯",
-    "Yoningda bo'lsam ham, seni yana sog'inaveraman. 🥺"
+    "Seni baxtli ko'rish - mening eng katta orzuim. 🌈"
 ]
 
 POEMS = [
-    "Ko'zlaringga boqsam, dunyo unutilar,\nSening sevging bilan dillar yorishar.\nSening borliging - bu baxtim, iqbolim,\nSeni sevish - mening hayotiy yo'lim. ❤️",
-    "Sevgi nima? Bu sening kulguing,\nYuragimda qolgan o'chmas tuyg'uing.\nSeni sog'inganda osmon yig'laydi,\nSening sevging meni mangu bog'laydi. 🌹",
-    "Xolisxonim, go'zalim, yagonam o'zing,\nShirin so'zing, nurli ko'zing, baxtim o'zing.\nSeni sevishdan hech qachon tolmayman,\nSensiz bu dunyoda yashay olmayman. ✨"
+    "Ko'zlaringga boqsam, dunyo unutilar,\nSening sevging bilan dillar yorishar. ❤️",
+    "Sevgi nima? Bu sening kulguing,\nYuragimda qolgan o'chmas tuyg'uing. 🌹",
+    "Xolisxonim, go'zalim, yagonam o'zing,\nShirin so'zing, nurli ko'zing, baxtim o'zing. ✨"
 ]
 
 HEART_EFFECTS = ["❤️", "💖", "💗", "💓", "💞", "💕", "💘", "💌", "💝", "🎯"]
@@ -56,11 +52,6 @@ def get_main_keyboard():
     markup.add(btn1, btn2, btn3, btn4, btn5, btn_stop)
     return markup
 
-def get_stop_only_keyboard():
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("⛔ STOP", callback_data="stop_all"))
-    return markup
-
 async def download_audio(query):
     ydl_opts = {
         'format': 'bestaudio/best',
@@ -71,7 +62,6 @@ async def download_audio(query):
         }],
         'outtmpl': 'music/%(title)s.%(ext)s',
         'quiet': True,
-        'no_warnings': True,
         'default_search': 'ytsearch1'
     }
     if not os.path.exists('music'): os.makedirs('music')
@@ -79,40 +69,33 @@ async def download_audio(query):
         info = ydl.extract_info(query, download=True)
         entry = info['entries'][0] if 'entries' in info else info
         filename = ydl.prepare_filename(entry)
-        actual_filename = os.path.splitext(filename)[0] + ".mp3"
-        return actual_filename, entry.get('title', 'Musiqa')
+        return os.path.splitext(filename)[0] + ".mp3", entry.get('title', 'Musiqa')
 
 # --- HANDLERLAR ---
-
 @bot.message_handler(commands=['start'])
 async def send_welcome(message):
-    chat_id = message.chat.id
-    user_states[chat_id] = {"looping": False, "last_msg_id": None}
-    welcome_text = "❤️ **Xolisxon Botiga xush kelibsiz!** ❤️\n\nTanlang:"
-    await bot.send_message(chat_id, welcome_text, reply_markup=get_main_keyboard(), parse_mode="Markdown")
+    await bot.send_message(message.chat.id, "❤️ **Xolisxon Botiga xush kelibsiz!**", reply_markup=get_main_keyboard(), parse_mode="Markdown")
 
 @bot.callback_query_handler(func=lambda call: True)
 async def callback_listener(call):
     chat_id = call.message.chat.id
     if call.data == "loop_love":
         user_states[chat_id] = {"looping": True}
-        await bot.answer_callback_query(call.id, "Boshlandi... ❤️")
-        msg = await bot.send_message(chat_id, "❤️ Oqim...", reply_markup=get_stop_only_keyboard())
+        msg = await bot.send_message(chat_id, "❤️ Oqim boshlandi...")
         while user_states.get(chat_id, {}).get("looping"):
             try:
                 text = f"{random.choice(HEART_EFFECTS)} {random.choice(ROMANTIC_TEXTS)}"
-                await bot.edit_message_text(text, chat_id, msg.message_id, reply_markup=get_stop_only_keyboard())
+                await bot.edit_message_text(text, chat_id, msg.message_id)
                 await asyncio.sleep(5)
             except: break
     elif call.data == "stop_all":
         user_states[chat_id] = {"looping": False}
-        await bot.send_message(chat_id, "To'xtatildi.", reply_markup=get_main_keyboard())
-    elif call.data == "music_search":
-        await bot.send_message(chat_id, "🎵 Musiqa nomini yozing:")
+        await bot.send_message(chat_id, "⛔ Barcha jarayonlar to'xtatildi.", reply_markup=get_main_keyboard())
     elif call.data == "poems":
         await bot.send_message(chat_id, random.choice(POEMS), reply_markup=get_main_keyboard())
+    elif call.data == "music_search":
+        await bot.send_message(chat_id, "🎵 Musiqa nomini va xonandasini yozing:")
 
-# Musiqa qidirish xabarlarini tutish
 @bot.message_handler(func=lambda m: True)
 async def handle_text(message):
     if message.text.startswith('/'): return
@@ -120,15 +103,15 @@ async def handle_text(message):
     try:
         file_path, title = await download_audio(message.text)
         with open(file_path, 'rb') as audio:
-            await bot.send_audio(message.chat.id, audio, caption=f"✅ {title}")
+            await bot.send_audio(message.chat.id, audio, caption=f"✅ {title}\n@xolisxon_bot ❤️")
         os.remove(file_path)
         await bot.delete_message(message.chat.id, status_msg.message_id)
     except Exception as e:
-        await bot.edit_message_text("❌ Topilmadi.", message.chat.id, status_msg.message_id)
+        await bot.edit_message_text("❌ Musiqa topilmadi.", message.chat.id, status_msg.message_id)
 
 # --- RUN ---
 async def main():
-    logger.info("Bot yondi...")
+    logger.info("Bot ishga tushdi!")
     await bot.polling(non_stop=True)
 
 if __name__ == "__main__":
